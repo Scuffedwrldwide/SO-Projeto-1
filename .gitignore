@@ -1,0 +1,7 @@
+*
+!/jobs/
+/jobs/*.out
+!*.c
+!*.h
+!.gitignore
+```
