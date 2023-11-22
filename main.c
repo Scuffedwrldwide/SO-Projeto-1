@@ -33,6 +33,9 @@ int main(int argc, char *argv[]) {
     argc -= 2;
     argv += 2;
   }
+  else {
+    dir = opendir("./jobs"); // Default path
+  }
   
   if (argc > 1) {
     char *endptr;
@@ -51,8 +54,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  struct dirent *file = NULL;
-  if (file != NULL) file = readdir(dir);
+  struct dirent *file = readdir(dir);
   while (file != NULL) {
     int fd = -1;
     /*if (file->d_type != DT_REG) {
