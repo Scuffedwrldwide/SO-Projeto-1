@@ -1,5 +1,6 @@
 #include <limits.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -16,25 +17,28 @@ int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
   DIR *dir = NULL;
 
+  // FIXME: Implement proper argument parsing
   if (argc > 1 /*&& strcmp(argv[1], "-path") == 0*/) {
     if (argc < 3) {
       fprintf(stderr, "Missing path argument\n");
       return 1;
     }
 
-    dir = opendir(argv[2]);
-
-    if (dir == NULL) {
-      fprintf(stderr, "Directory does not exist or not available\n");
+    if (chdir(argv[2]) == -1) {
+      perror("chdir");
       return 1;
     }
-
+    dir = opendir(".");
     // "Discard" the "-path" argument and the path itself
     argc -= 2;
     argv += 2;
   }
   else {
-    dir = opendir("./jobs"); // Default path
+    if (chdir("./jobs") == -1) {
+      perror("chdir");
+      return 1;
+    }
+    dir = opendir(".");
   }
   
   if (argc > 1) {
@@ -51,24 +55,39 @@ int main(int argc, char *argv[]) {
 
   if (ems_init(state_access_delay_ms)) {
     fprintf(stderr, "Failed to initialize EMS\n");
+    closedir(dir);
     return 1;
   }
 
   struct dirent *file = readdir(dir);
+
   while (file != NULL) {
     int fd = -1;
-    /*if (file->d_type != DT_REG) {
+    int out_fd = -1;
+
+    char out_file_name[32];
+
+    /*printf("Processing file %s\n", file->d_name);
+    printf("extension %s\n", &file->d_name[strlen(file->d_name) - 4]);*/
+    if (strncmp(&file->d_name[0], ".", 1) == 0 || strcmp(&file->d_name[strlen(file->d_name) - 4], "jobs") != 0) {
+      printf("Skipping file %s\n", file->d_name);
       file = readdir(dir);
       continue;
-    }*/
+    }
+
     fd = open(file->d_name, O_RDONLY);
-    while (1) {
+    strncpy(out_file_name, file->d_name, strlen(file->d_name) - 4);
+    strcpy(&out_file_name[strlen(file->d_name) - 4], "out\0");
+    printf("out_file_name %s\n", out_file_name);
+
+    out_fd = open(out_file_name, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+
+    while (fd != -1) {
       unsigned int event_id, delay;
       size_t num_rows, num_columns, num_coords;
       size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
 
       fflush(stdout);
-
       switch (get_next(fd)) {
         case CMD_CREATE:
           if (parse_create(fd, &event_id, &num_rows, &num_columns) != 0) {
@@ -102,14 +121,14 @@ int main(int argc, char *argv[]) {
             continue;
           }
 
-          if (ems_show(event_id)) {
+          if (ems_show(event_id, out_fd)) {
             fprintf(stderr, "Failed to show event\n");
           }
 
           break;
 
         case CMD_LIST_EVENTS:
-          if (ems_list_events()) {
+          if (ems_list_events(out_fd)) {
             fprintf(stderr, "Failed to list events\n");
           }
           
@@ -151,10 +170,16 @@ int main(int argc, char *argv[]) {
           break;
 
         case EOC:
-          ems_terminate();
+          printf("End of commands\n"); 
+          close(fd);
+          close(out_fd);
+          file = readdir(dir);
+          fd = -1;
+          out_fd = -1;
           break;
       }
     }
-    file = readdir(dir);
   }
+  ems_terminate();
+  closedir(dir);
 }
