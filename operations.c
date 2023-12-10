@@ -46,6 +46,24 @@ static unsigned int* get_seat_with_delay(struct Event* event, size_t index) {
 /// @return Index of the seat.
 static size_t seat_index(struct Event* event, size_t row, size_t col) { return (row - 1) * event->cols + col - 1; }
 
+void write_uint(int fd, unsigned int value) {
+  char buffer[2];
+  int length = 0;
+
+
+  if (value == 0) {
+    buffer[length++] = '0';
+  }
+  while (value != 0){
+    buffer[length++] = '0' + (char)(value % 10);
+    value /= 10;
+  } 
+ 
+  for (int i = length - 1; i >= 0; --i) {
+    write(fd, &buffer[i], 1);
+  }
+}
+
 int ems_init(unsigned int delay_ms) {
   if (event_list != NULL) {
     fprintf(stderr, "EMS state has already been initialized\n");
@@ -173,7 +191,7 @@ int ems_show(unsigned int event_id, int fd) {
   for (size_t i = 1; i <= event->rows; i++) {
     for (size_t j = 1; j <= event->cols; j++) {
       unsigned int* seat = get_seat_with_delay(event, seat_index(event, i, j));
-      write(fd, &seat, sizeof(unsigned int));
+      write_uint(fd, *seat);
 
       if (j < event->cols) {
         write(fd, " ", 1);
