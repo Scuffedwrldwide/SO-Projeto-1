@@ -66,9 +66,9 @@ int main(int argc, char *argv[]) {
   struct dirent *file = readdir(dir);
 
   while (file != NULL) {
-      if (proc_count >= 3) {
+    int status;
+    if (proc_count >= 20) {
       // Wait for any child process to finish before starting a new one
-      int status;
       wait(&status);
       proc_count--;
     }
@@ -81,7 +81,9 @@ int main(int argc, char *argv[]) {
       // Parent process
       proc_count++;
     }
-
+    if(WIFEXITED(status)==1){
+      printf("child %d exited with status %d\n", proc_count, WEXITSTATUS(status));
+    }
     file = readdir(dir);
   }
   ems_terminate();
@@ -97,14 +99,14 @@ void process_file(const char *filename){
   /*printf("Processing file %s\n", filename);
   printf("extension %s\n", &filename[strlen(filename) - 4]);*/
   if (strncmp(&filename[0], ".", 1) == 0 || strcmp(&filename[strlen(filename) - 4], "jobs") != 0) {
-    printf("Skipping file %s\n", filename);
+    //printf("Skipping file %s\n", filename);
     return;
   }
 
   fd = open(filename, O_RDONLY);
   strncpy(out_file_name, filename, strlen(filename) - 4);
   strcpy(&out_file_name[strlen(filename) - 4], "out\0");
-  printf("out_file_name %s\n", out_file_name);
+  //printf("out_file_name %s\n", out_file_name);
 
   out_fd = open(out_file_name, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 
@@ -196,7 +198,7 @@ void process_file(const char *filename){
         break;
 
       case EOC:
-        printf("End of commands\n"); 
+        //printf("End of commands\n"); 
         close(fd);
         close(out_fd);
         return;
