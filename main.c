@@ -18,43 +18,47 @@ void process_file(const char *filename);
 
 int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
-  int proc_count = 0;
+  int option;
+  int MAX_PROC = 20;
   DIR *dir = NULL;
 
-  // FIXME: Implement proper argument parsing
-  if (argc > 1 /*&& strcmp(argv[1], "-path") == 0*/) {
-    if (argc < 3) {
-      fprintf(stderr, "Missing path argument\n");
-      return 1;
-    }
-
-    if (chdir(argv[2]) == -1) {
-      perror("chdir");
-      return 1;
-    }
-    dir = opendir(".");
-    // "Discard" the "-path" argument and the path itself
-    argc -= 2;
-    argv += 2;
-  }
-  else {
-    if (chdir("./jobs") == -1) {
-      perror("chdir");
-      return 1;
-    }
-    dir = opendir(".");
-  }
   
-  if (argc > 1) {
-    char *endptr;
-    unsigned long int delay = strtoul(argv[argc-1], &endptr, 10);
+  while((option = getopt(argc, argv, "d:p:m:t")) != -1){
+    switch(option){
+      case 'd':
+        if (optarg == NULL) {
+          fprintf(stderr, "Invalid delay value\n");
+          return 1;
+        }
 
-    if (*endptr != '\0' || delay > UINT_MAX) {
-      fprintf(stderr, "Invalid delay value or value too large\n");
-      return 1;
+        char *endptr;
+        unsigned long int delay = strtoul(optarg, &endptr, 10);
+
+        if (*endptr != '\0' || delay > UINT_MAX) {
+          fprintf(stderr, "Invalid delay value or value too large\n");
+          return 1;
+        }
+
+        state_access_delay_ms = (unsigned int)delay;
+        printf("state_access_delay_ms %d\n", state_access_delay_ms);
+        break;
+      case 'p':
+        if ((dir = opendir(optarg)) == NULL || chdir(optarg) == -1) {
+          fprintf(stderr, "Failed to open directory %s: %s\n", optarg, strerror(errno));
+          return 1;
+        }
+        break;
+      case 'm':
+        if (optarg == NULL) {
+          fprintf(stderr, "Invalid max proc value, defaulting to %d\n", MAX_PROC);
+        }
+        MAX_PROC = atoi(optarg);
+        break;
+      case 't':
+        //PLACEHOLDER FOR MAX THREADS
+        printf("t option\n");
+        break;
     }
-
-    state_access_delay_ms = (unsigned int)delay;
   }
 
   if (ems_init(state_access_delay_ms)) {
@@ -63,31 +67,57 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  struct dirent *file = readdir(dir);
+  struct dirent *file;
+  int proc_count = 0;
+  int status;
+  pid_t pid;
 
-  while (file != NULL) {
-    int status;
-    if (proc_count >= 20) {
-      // Wait for any child process to finish before starting a new one
-      wait(&status);
-      proc_count--;
-    }
+  while ((file = readdir(dir)) != NULL) {
+    if (file->d_name[0] != '.' && strcmp(&file->d_name[strlen(file->d_name) - 4], "jobs") == 0) {
+      if (proc_count > MAX_PROC) {
+        // Wait for any child process to finish before starting a new one
+        printf("Waiting for child process to finish\n");
+        pid = wait(&status);
+        if (pid > 0) {
+          proc_count--;
+        } else {
+          fprintf(stderr, "Failed to wait for child process: %s\n", strerror(errno));
+          closedir(dir);
+          return 1;
+        }
+      }
 
-    if (fork() == 0) {
-      // Child process
-      process_file(file->d_name);
-      exit(0);
-    } else {
-      // Parent process
-      proc_count++;
+      if ((pid = fork()) == 0) {
+        // Child process
+        //printf("Processing file %s\n", file->d_name);
+        process_file(file->d_name);
+        exit(0);
+
+      } else {
+        // Parent process
+        // printf("Child process %d started\n", pid);
+        proc_count++;
+      }
     }
-    if(WIFEXITED(status)==1){
-      printf("child %d exited with status %d\n", proc_count, WEXITSTATUS(status));
-    }
-    file = readdir(dir);
   }
+
+  // Wait for all child processes to finish
+  while (proc_count > 0) {
+    //printf("Waiting for child process to finish\n");
+    pid = wait(&status);
+    printf("Child process %d finished\n", pid);
+    if (pid > 0) {
+      proc_count--;
+    } else {
+      fprintf(stderr, "Failed to wait for child process: %s\n", strerror(errno));
+      closedir(dir);
+      return 1;
+    }
+  }
+
   ems_terminate();
   closedir(dir);
+  return 0;
 }
 
 void process_file(const char *filename){
@@ -95,13 +125,6 @@ void process_file(const char *filename){
   int out_fd = -1;
 
   char out_file_name[32];
-
-  /*printf("Processing file %s\n", filename);
-  printf("extension %s\n", &filename[strlen(filename) - 4]);*/
-  if (strncmp(&filename[0], ".", 1) == 0 || strcmp(&filename[strlen(filename) - 4], "jobs") != 0) {
-    //printf("Skipping file %s\n", filename);
-    return;
-  }
 
   fd = open(filename, O_RDONLY);
   strncpy(out_file_name, filename, strlen(filename) - 4);
