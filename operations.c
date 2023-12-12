@@ -218,7 +218,8 @@ int ems_list_events(int fd) {
   struct ListNode* current = event_list->head;
   while (current != NULL) {
     write(fd, "Event: ", 7);
-    write(fd, &(current->event)->id, sizeof((current->event)->id));
+    write_uint(fd, (current->event)->id);
+    write(fd, "\n", 1);
     current = current->next;
   }
 
