@@ -22,7 +22,11 @@ int main(int argc, char *argv[]) {
   int MAX_PROC = 20;
   DIR *dir = NULL;
 
-  
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s -d <state_access_delay_ms> -p <path> -m <max_proc> -t <max_threads>\n", argv[0]);
+    return 1;
+  }
+
   while((option = getopt(argc, argv, "d:p:m:t")) != -1){
     switch(option){
       case 'd':
