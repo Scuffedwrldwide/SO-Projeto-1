@@ -9,17 +9,29 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 #include "constants.h"
 #include "operations.h"
 #include "parser.h"
 
 void process_file(const char *filename);
+void *thread_function(void *params);
+
+struct thread_params
+{
+  int fd;
+  int out_fd;
+  int thread_id;
+};
+
+int MAX_PROC = 20;
+int MAX_THREADS = 2;
 
 int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
   int option;
-  int MAX_PROC = 20;
+
   DIR *dir = NULL;
 
   if (argc < 2) {
@@ -137,6 +149,33 @@ void process_file(const char *filename){
 
   out_fd = open(out_file_name, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 
+  pthread_t threads[MAX_THREADS];
+  struct thread_params params[MAX_THREADS];
+
+  for (int i = 0; i < MAX_THREADS; i++) {
+    params[i].fd = fd;
+    params[i].out_fd = out_fd;
+    params[i].thread_id = i;
+    if (pthread_create(&threads[i], NULL, thread_function, &params[i]) != 0) {
+      fprintf(stderr, "Failed to create thread\n");
+      return;
+    }
+  }
+
+  for (int i = 0; i < MAX_THREADS; i++) {
+    if (pthread_join(threads[i], NULL) != 0) {
+      fprintf(stderr, "Failed to join thread\n");
+      return;
+    }
+  }
+}
+
+void *thread_function(void *params){
+  struct thread_params *thread_params = (struct thread_params*)params;
+
+  int fd = thread_params->fd;
+  int out_fd = thread_params->out_fd;
+
   while (fd != -1) {
     unsigned int event_id, delay;
     size_t num_rows, num_columns, num_coords;
@@ -228,7 +267,8 @@ void process_file(const char *filename){
         //printf("End of commands\n"); 
         close(fd);
         close(out_fd);
-        return;
+        pthread_exit(NULL);
     }
   }
+  pthread_exit(NULL);
 }
