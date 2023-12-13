@@ -29,7 +29,6 @@ struct thread_params
 int MAX_PROC = 20;
 int MAX_THREADS = 2;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_barrier_t barrier;
 
 int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
@@ -97,7 +96,6 @@ int main(int argc, char *argv[]) {
   int proc_count = 0;
   int status;
   pid_t pid;
-  pthread_barrier_init(&barrier, NULL, (unsigned int)MAX_THREADS);
 
   while ((file = readdir(dir)) != NULL) {
     if (file->d_name[0] != '.' && strcmp(&file->d_name[strlen(file->d_name) - 4], "jobs") == 0) {
@@ -163,7 +161,7 @@ void process_file(const char *filename){
 
   pthread_t threads[MAX_THREADS];
   struct thread_params params[MAX_THREADS];
-
+  pthread_mutex_init(&mutex, NULL);
 
   for (int i = 0; i < MAX_THREADS; i++) {
     params[i].fd = fd;
@@ -182,8 +180,6 @@ void process_file(const char *filename){
       return;
     }
   }
-  pthread_barrier_destroy(&barrier);
-  pthread_mutex_destroy(&mutex);
 }
 
 void *thread_function(void *params){
@@ -203,39 +199,35 @@ void *thread_function(void *params){
     switch (get_next(fd)) {
       case CMD_CREATE:
         if (parse_create(fd, &event_id, &num_rows, &num_columns) != 0) {
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
           pthread_mutex_unlock(&mutex);
+          fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
         }
-
+        pthread_mutex_unlock(&mutex);
         if (ems_create(event_id, num_rows, num_columns)) {
           fprintf(stderr, "Failed to create event\n");  
         }
-        pthread_mutex_unlock(&mutex);          
         break;
 
       case CMD_RESERVE:
         num_coords = parse_reserve(fd, MAX_RESERVATION_SIZE, &event_id, xs, ys);
-
+        pthread_mutex_unlock(&mutex);
         if (num_coords == 0) {
           fprintf(stderr, "Invalid command. See HELP for usage\n");
-          pthread_mutex_unlock(&mutex);
           continue;
         }
 
         if (ems_reserve(event_id, num_coords, xs, ys)) {
           fprintf(stderr, "Failed to reserve seats\n");
         }
-        pthread_mutex_unlock(&mutex);
         break;
 
       case CMD_SHOW:
         if (parse_show(fd, &event_id) != 0) {
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
           pthread_mutex_unlock(&mutex);
+          fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
         }
-
         if (ems_show(event_id, out_fd)) {
           fprintf(stderr, "Failed to show event\n");
         }
@@ -243,33 +235,33 @@ void *thread_function(void *params){
         break;
 
       case CMD_LIST_EVENTS:
+        pthread_mutex_unlock(&mutex);
         if (ems_list_events(out_fd)) {
           fprintf(stderr, "Failed to list events\n");
         }
-        pthread_mutex_unlock(&mutex);
         break;
 
       case CMD_WAIT:
         if (parse_wait(fd, &delay, NULL) == -1) {  // thread_id is not implemented
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
           pthread_mutex_unlock(&mutex);
+          fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
         }
-
+        pthread_mutex_unlock(&mutex);
         if (delay > 0) {
           printf("thread number %d\n now waiting", thread_id);
           ems_wait(delay);
           printf("done\n");
-          pthread_mutex_unlock(&mutex);
         }
         break;
 
       case CMD_INVALID:
-        fprintf(stderr, "Invalid command. See HELP for usage\n");
         pthread_mutex_unlock(&mutex);
+        fprintf(stderr, "Invalid command. See HELP for usage\n");
         break;
 
       case CMD_HELP:
+        pthread_mutex_unlock(&mutex);
         printf(
             "Available commands:\n"
             "  CREATE <event_id> <num_rows> <num_columns>\n"
@@ -279,7 +271,6 @@ void *thread_function(void *params){
             "  WAIT <delay_ms> [thread_id]\n"  // thread_id is not implemented
             "  BARRIER\n"                      // Not implemented
             "  HELP\n");
-        pthread_mutex_unlock(&mutex);
         break;
 
       case CMD_BARRIER: 
@@ -290,10 +281,10 @@ void *thread_function(void *params){
         break;
 
       case EOC:
+        pthread_mutex_unlock(&mutex);
         //printf("End of commands\n"); 
         close(fd);
         close(out_fd);
-        pthread_mutex_unlock(&mutex);
         pthread_exit(NULL);
     }
   }

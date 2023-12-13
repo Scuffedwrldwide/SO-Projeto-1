@@ -143,6 +143,7 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
     return 1;
   }
 
+  pthread_rwlock_wrlock(&event_list->rwlock);
   unsigned int reservation_id = ++event->reservations;
 
   size_t i = 0;
@@ -169,9 +170,10 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
     for (size_t j = 0; j < i; j++) {
       *get_seat_with_delay(event, seat_index(event, xs[j], ys[j])) = 0;
     }
+    pthread_rwlock_unlock(&event_list->rwlock);
     return 1;
   }
-
+  pthread_rwlock_unlock(&event_list->rwlock);
   return 0;
 }
 
@@ -188,6 +190,7 @@ int ems_show(unsigned int event_id, int fd) {
     return 1;
   }
 
+  pthread_rwlock_rdlock(&event_list->rwlock);
   for (size_t i = 1; i <= event->rows; i++) {
     for (size_t j = 1; j <= event->cols; j++) {
       unsigned int* seat = get_seat_with_delay(event, seat_index(event, i, j));
@@ -200,7 +203,7 @@ int ems_show(unsigned int event_id, int fd) {
 
     write(fd, "\n", 1);
   }
-
+  pthread_rwlock_unlock(&event_list->rwlock);
   return 0;
 }
 
