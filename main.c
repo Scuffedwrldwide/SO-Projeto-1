@@ -199,17 +199,21 @@ void *thread_function(void *params){
     size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
 
     fflush(stdout);
-    switch (get_next(fd)) {
+    pthread_mutex_lock(&mutex);
+    int cmd = get_next(fd);
+    pthread_mutex_unlock(&mutex);
+    switch (cmd) {
       case CMD_CREATE:
         if (parse_create(fd, &event_id, &num_rows, &num_columns) != 0) {
           fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
         }
 
+        pthread_mutex_lock(&mutex);
         if (ems_create(event_id, num_rows, num_columns)) {
-          fprintf(stderr, "Failed to create event\n");
-          
+          fprintf(stderr, "Failed to create event\n");  
         }
+        pthread_mutex_unlock(&mutex);
         break;
 
       case CMD_RESERVE:
@@ -222,8 +226,7 @@ void *thread_function(void *params){
 
         pthread_mutex_lock(&mutex);
         if (ems_reserve(event_id, num_coords, xs, ys)) {
-          fprintf(stderr, "Failed to reserve seats\n");
-          
+          fprintf(stderr, "Failed to reserve seats\n"); 
         }
         pthread_mutex_unlock(&mutex);
         break;
