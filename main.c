@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
   while (proc_count > 0) {
     //printf("Waiting for child process to finish\n");
     pid = wait(&status);
-    printf("Child process %d finished\n", pid);
+    printf("Child process %d finished with status %d\n", pid, WEXITSTATUS(status));
     if (pid > 0) {
       proc_count--;
     } else {
