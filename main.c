@@ -23,13 +23,13 @@ struct thread_params
   int fd;
   int out_fd;
   int thread_id;
-  pthread_mutex_t *mutex; 
+
 };
 
 int MAX_PROC = 20;
 int MAX_THREADS = 2;
-int barrier_flag = 0;
-
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_barrier_t barrier;
 
 int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
@@ -42,7 +42,9 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  while((option = getopt(argc, argv, "d:p:m:t")) != -1){
+  while((option = getopt(argc, argv, "d:p:m:t:")) != -1){
+    printf("option %c\n", option);
+    printf("optarg %s\n", optarg);
     switch(option){
       case 'd':
         if (optarg == NULL) {
@@ -71,18 +73,19 @@ int main(int argc, char *argv[]) {
         if (optarg == NULL) {
           fprintf(stderr, "Invalid max proc value, defaulting to %d\n", MAX_PROC);
         }
-        MAX_PROC = atoi(optarg);
+        MAX_PROC= atoi(optarg);
         break;
       case 't':
-        //PLACEHOLDER FOR MAX THREADS
-        printf("t option\n");
         if (optarg == NULL) {
           fprintf(stderr, "Invalid max thread value, defaulting to %d\n", MAX_THREADS);
         }
-        else{MAX_THREADS= atoi(optarg);}
+        MAX_THREADS= atoi(optarg);
         break;
     }
   }
+
+  printf("MAX_PROC %d\n", MAX_PROC);
+  printf("MAX_THREADS %d\n", MAX_THREADS);
 
   if (ems_init(state_access_delay_ms)) {
     fprintf(stderr, "Failed to initialize EMS\n");
@@ -94,6 +97,7 @@ int main(int argc, char *argv[]) {
   int proc_count = 0;
   int status;
   pid_t pid;
+  pthread_barrier_init(&barrier, NULL, (unsigned int)MAX_THREADS);
 
   while ((file = readdir(dir)) != NULL) {
     if (file->d_name[0] != '.' && strcmp(&file->d_name[strlen(file->d_name) - 4], "jobs") == 0) {
@@ -156,17 +160,16 @@ void process_file(const char *filename){
 
   out_fd = open(out_file_name, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 
+
   pthread_t threads[MAX_THREADS];
   struct thread_params params[MAX_THREADS];
 
-  pthread_mutex_t mutex;  
-  pthread_mutex_init(&mutex, NULL);
 
   for (int i = 0; i < MAX_THREADS; i++) {
     params[i].fd = fd;
     params[i].out_fd = out_fd;
     params[i].thread_id = i;
-    params[i].mutex = &mutex;
+
     if (pthread_create(&threads[i], NULL, thread_function, &params[i]) != 0) {
       fprintf(stderr, "Failed to create thread\n");
       return;
@@ -179,6 +182,7 @@ void process_file(const char *filename){
       return;
     }
   }
+  pthread_barrier_destroy(&barrier);
   pthread_mutex_destroy(&mutex);
 }
 
@@ -187,7 +191,7 @@ void *thread_function(void *params){
 
   int fd = thread_params->fd;
   int out_fd = thread_params->out_fd;
-  pthread_mutex_t *mutex = thread_params->mutex;
+  int thread_id = thread_params->thread_id;
 
   while (fd != -1) {
     unsigned int event_id, delay;
@@ -216,10 +220,12 @@ void *thread_function(void *params){
           continue;
         }
 
+        pthread_mutex_lock(&mutex);
         if (ems_reserve(event_id, num_coords, xs, ys)) {
           fprintf(stderr, "Failed to reserve seats\n");
           
         }
+        pthread_mutex_unlock(&mutex);
         break;
 
       case CMD_SHOW:
@@ -228,17 +234,20 @@ void *thread_function(void *params){
           continue;
         }
 
+        pthread_mutex_lock(&mutex);
         if (ems_show(event_id, out_fd)) {
           fprintf(stderr, "Failed to show event\n");
         }
+        pthread_mutex_unlock(&mutex);
 
         break;
 
       case CMD_LIST_EVENTS:
+        pthread_mutex_lock(&mutex);
         if (ems_list_events(out_fd)) {
           fprintf(stderr, "Failed to list events\n");
         }
-        
+        pthread_mutex_unlock(&mutex);
         break;
 
       case CMD_WAIT:
@@ -248,11 +257,11 @@ void *thread_function(void *params){
         }
 
         if (delay > 0) {
-          
-          pthread_mutex_lock(mutex);
+          printf("thread number %d\n now waiting", thread_id);
+          pthread_mutex_lock(&mutex);
           printf("Waiting...\n");
           ems_wait(delay);
-          pthread_mutex_unlock(mutex); 
+          pthread_mutex_unlock(&mutex); 
           printf("done\n");
         }
 
@@ -276,14 +285,9 @@ void *thread_function(void *params){
         break;
 
       case CMD_BARRIER: 
-        printf("1\n");
-        pthread_mutex_lock(mutex);
-        printf("2\n");  
-        barrier_flag = 1;
-        pthread_mutex_unlock(mutex); 
-        printf("3\n");
-        pthread_exit(NULL);
-        printf("4\n");
+        printf("thread number %d\n now waiting", thread_params->thread_id);
+        pthread_barrier_wait(&barrier);
+        printf("thread number %d\n done waiting", thread_params->thread_id);
         break;
       case CMD_EMPTY:
         break;
