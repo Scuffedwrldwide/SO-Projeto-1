@@ -23,10 +23,13 @@ struct thread_params
   int fd;
   int out_fd;
   int thread_id;
+  pthread_mutex_t *mutex; 
 };
 
 int MAX_PROC = 20;
 int MAX_THREADS = 2;
+int barrier_flag = 0;
+
 
 int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
@@ -73,6 +76,10 @@ int main(int argc, char *argv[]) {
       case 't':
         //PLACEHOLDER FOR MAX THREADS
         printf("t option\n");
+        if (optarg == NULL) {
+          fprintf(stderr, "Invalid max thread value, defaulting to %d\n", MAX_THREADS);
+        }
+        else{MAX_THREADS= atoi(optarg);}
         break;
     }
   }
@@ -152,10 +159,14 @@ void process_file(const char *filename){
   pthread_t threads[MAX_THREADS];
   struct thread_params params[MAX_THREADS];
 
+  pthread_mutex_t mutex;  
+  pthread_mutex_init(&mutex, NULL);
+
   for (int i = 0; i < MAX_THREADS; i++) {
     params[i].fd = fd;
     params[i].out_fd = out_fd;
     params[i].thread_id = i;
+    params[i].mutex = &mutex;
     if (pthread_create(&threads[i], NULL, thread_function, &params[i]) != 0) {
       fprintf(stderr, "Failed to create thread\n");
       return;
@@ -168,6 +179,7 @@ void process_file(const char *filename){
       return;
     }
   }
+  pthread_mutex_destroy(&mutex);
 }
 
 void *thread_function(void *params){
@@ -175,6 +187,7 @@ void *thread_function(void *params){
 
   int fd = thread_params->fd;
   int out_fd = thread_params->out_fd;
+  pthread_mutex_t *mutex = thread_params->mutex;
 
   while (fd != -1) {
     unsigned int event_id, delay;
@@ -235,8 +248,12 @@ void *thread_function(void *params){
         }
 
         if (delay > 0) {
+          
+          pthread_mutex_lock(mutex);
           printf("Waiting...\n");
           ems_wait(delay);
+          pthread_mutex_unlock(mutex); 
+          printf("done\n");
         }
 
         break;
@@ -258,7 +275,15 @@ void *thread_function(void *params){
 
         break;
 
-      case CMD_BARRIER:  // Not implemented
+      case CMD_BARRIER: 
+        printf("1\n");
+        pthread_mutex_lock(mutex);
+        printf("2\n");  
+        barrier_flag = 1;
+        pthread_mutex_unlock(mutex); 
+        printf("3\n");
+        pthread_exit(NULL);
+        printf("4\n");
         break;
       case CMD_EMPTY:
         break;
