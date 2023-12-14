@@ -29,6 +29,7 @@ struct thread_params
 int MAX_PROC = 20;
 int MAX_THREADS = 2;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+unsigned int barrier_flag = 0;
 
 int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
@@ -157,29 +158,46 @@ void process_file(const char *filename){
 
   out_fd = open(out_file_name, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 
+  if (fd == -1) {
+    fprintf(stderr, "Failed to open file %s: %s\n", filename, strerror(errno));
+    return;
+  }
+  if (out_fd == -1) {
+    fprintf(stderr, "Failed to open file %s: %s\n", out_file_name, strerror(errno));
+    close(fd);
+    return;
+  }
 
   pthread_t threads[MAX_THREADS];
   struct thread_params params[MAX_THREADS];
   pthread_mutex_init(&mutex, NULL);
+  void *thread_status = NULL;
+  while (1) {
+    barrier_flag = 0;
+    for (int i = 0; i < MAX_THREADS; i++) {
+      params[i].fd = fd;
+      params[i].out_fd = out_fd;
+      params[i].thread_id = i;
 
-  for (int i = 0; i < MAX_THREADS; i++) {
-    params[i].fd = fd;
-    params[i].out_fd = out_fd;
-    params[i].thread_id = i;
-
-    if (pthread_create(&threads[i], NULL, thread_function, &params[i]) != 0) {
-      fprintf(stderr, "Failed to create thread\n");
-      return;
+      if (pthread_create(&threads[i], NULL, thread_function, &params[i]) != 0) {
+        fprintf(stderr, "Failed to create thread\n");
+        return;
+      }
     }
-  }
 
-  for (int i = 0; i < MAX_THREADS; i++) {
-    if (pthread_join(threads[i], NULL) != 0) {
-      fprintf(stderr, "Failed to join thread\n");
-      close(fd);
-      close(out_fd);
-      return;
+    for (int i = 0; i < MAX_THREADS; i++) {
+      if (pthread_join(threads[i], &thread_status) != 0) {
+        fprintf(stderr, "Failed to join thread\n");
+        close(fd);
+        close(out_fd);
+        return;
+      }
+      if (thread_status != NULL && *((int*)thread_status) != 0){
+        printf("thread number %d restarting from barrier\n", i);
+        continue;
+      }
     }
+    return;
   }
   close(fd);
   close(out_fd);
@@ -199,6 +217,11 @@ void *thread_function(void *params){
 
     fflush(stdout);
     pthread_mutex_lock(&mutex);
+    if (barrier_flag != 0){
+      printf("thread number %d found closed barrier\n", thread_id);
+      pthread_mutex_unlock(&mutex);
+      pthread_exit(&barrier_flag);
+    }
     switch (get_next(fd)) {
       case CMD_CREATE:
         if (parse_create(fd, &event_id, &num_rows, &num_columns) != 0) {
@@ -287,8 +310,12 @@ void *thread_function(void *params){
         break;
 
       case CMD_BARRIER: 
+        if (barrier_flag == 0){
+          printf("thread number %d triggered barrier\n", thread_id);
+          barrier_flag = 1;
+        }
         pthread_mutex_unlock(&mutex);
-        break;
+        pthread_exit(&barrier_flag);
       case CMD_EMPTY:
         pthread_mutex_unlock(&mutex);
         break;
