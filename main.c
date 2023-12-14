@@ -163,7 +163,7 @@ void process_file(const char *filename) {
   fd = open(filename, O_RDONLY);
   strncpy(out_file_name, filename, strlen(filename) - 4);
   strcpy(&out_file_name[strlen(filename) - 4], "out\0");
-  // printf("out_file_name %s\n", out_file_name);
+  printf("out_file_name %s\n", out_file_name);
 
   out_fd = open(out_file_name, O_WRONLY | O_CREAT | O_TRUNC,
                 S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
@@ -182,10 +182,10 @@ void process_file(const char *filename) {
   pthread_t threads[MAX_THREADS];
   struct thread_params params[MAX_THREADS];
   pthread_mutex_init(&mutex, NULL);
-  void *thread_status = NULL;
+  void *thread_status = &barrier_flag;
   wait_queue = malloc(sizeof(int) * (unsigned long)MAX_THREADS);
 
-  while (1) {
+  while (thread_status != NULL) {
     barrier_flag = 0;
     for (int i = 0; i < MAX_THREADS; i++) {
       params[i].fd = fd;
@@ -205,13 +205,10 @@ void process_file(const char *filename) {
         close(out_fd);
         return;
       }
-      if (thread_status != NULL && *((int *)thread_status) != 0) {
-        printf("thread number %d restarting from barrier\n", i);
-        continue;
-      }
     }
-    return;
   }
+  close(fd);
+  close(out_fd);
 }
 
 void *thread_function(void *params) {
