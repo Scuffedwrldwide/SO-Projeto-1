@@ -17,6 +17,7 @@
 
 void process_file(const char *filename);
 void *thread_function(void *params);
+unsigned int *wait_queue;
 
 struct thread_params
 {
@@ -141,6 +142,7 @@ int main(int argc, char *argv[]) {
     }
   }
   ems_terminate();
+  free(wait_queue);
   closedir(dir);
   return 0;
 }
@@ -172,6 +174,8 @@ void process_file(const char *filename){
   struct thread_params params[MAX_THREADS];
   pthread_mutex_init(&mutex, NULL);
   void *thread_status = NULL;
+  wait_queue = malloc(sizeof(int) * (unsigned long)MAX_THREADS);
+
   while (1) {
     barrier_flag = 0;
     for (int i = 0; i < MAX_THREADS; i++) {
@@ -199,8 +203,6 @@ void process_file(const char *filename){
     }
     return;
   }
-  close(fd);
-  close(out_fd);
 }
 
 void *thread_function(void *params){
@@ -209,14 +211,21 @@ void *thread_function(void *params){
   int fd = thread_params->fd;
   int out_fd = thread_params->out_fd;
   int thread_id = thread_params->thread_id;
-  
+
   while (1) {
-    unsigned int event_id, delay;
+    unsigned int event_id, delay, *target_id;
+    int do_wait;
     size_t num_rows, num_columns, num_coords;
     size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
 
     fflush(stdout);
     pthread_mutex_lock(&mutex);
+    if (wait_queue[thread_id] > 0){
+      printf("thread number %d ordered to wait for %dms\n", thread_id, wait_queue[thread_id]);
+      ems_wait(wait_queue[thread_id]);
+      wait_queue[thread_id] = 0;
+      printf("thread number %d done waiting\n", thread_id);
+    }
     if (barrier_flag != 0){
       printf("thread number %d found closed barrier\n", thread_id);
       pthread_mutex_unlock(&mutex);
@@ -268,8 +277,8 @@ void *thread_function(void *params){
         break;
 
       case CMD_WAIT:
-        unsigned int *target_id = malloc(sizeof(unsigned int));
-        int do_wait = parse_wait(fd, &delay, target_id);
+        target_id = malloc(sizeof(unsigned int));
+        do_wait = parse_wait(fd, &delay, target_id);
         if (do_wait == -1) {
           free(target_id);
           pthread_mutex_unlock(&mutex);
@@ -279,7 +288,8 @@ void *thread_function(void *params){
         if (delay > 0) {
           if (do_wait == 1 && *target_id != (unsigned int)thread_id) {
             printf("thread number %d NOT waiting, thread %d should be\n", thread_id, *target_id); //threads might skip wait for others
-            free(target_id);
+            wait_queue[*target_id] += delay;
+            // target id will be freed by the thread that is waiting
             pthread_mutex_unlock(&mutex);
             break;
           }
@@ -326,5 +336,4 @@ void *thread_function(void *params){
         pthread_exit(NULL);
     }
   }
-  pthread_exit(NULL);
 }
