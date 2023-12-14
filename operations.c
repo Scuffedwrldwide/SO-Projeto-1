@@ -81,7 +81,6 @@ int ems_terminate() {
     fprintf(stderr, "EMS state must be initialized\n");
     return 1;
   }
-
   free_list(event_list);
   return 0;
 }
@@ -212,9 +211,10 @@ int ems_list_events(int fd) {
     fprintf(stderr, "EMS state must be initialized\n");
     return 1;
   }
-
+  pthread_rwlock_rdlock(&event_list->rwlock);
   if (event_list->head == NULL) {
     write(fd, "No events\n", 10);
+    pthread_rwlock_unlock(&event_list->rwlock);
     return 0;
   }
 
@@ -225,7 +225,7 @@ int ems_list_events(int fd) {
     write(fd, "\n", 1);
     current = current->next;
   }
-
+  pthread_rwlock_unlock(&event_list->rwlock);
   return 0; 
 }
 

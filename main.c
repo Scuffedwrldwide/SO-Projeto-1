@@ -139,7 +139,6 @@ int main(int argc, char *argv[]) {
       return 1;
     }
   }
-
   ems_terminate();
   closedir(dir);
   return 0;
@@ -177,9 +176,13 @@ void process_file(const char *filename){
   for (int i = 0; i < MAX_THREADS; i++) {
     if (pthread_join(threads[i], NULL) != 0) {
       fprintf(stderr, "Failed to join thread\n");
+      close(fd);
+      close(out_fd);
       return;
     }
   }
+  close(fd);
+  close(out_fd);
 }
 
 void *thread_function(void *params){
@@ -188,8 +191,8 @@ void *thread_function(void *params){
   int fd = thread_params->fd;
   int out_fd = thread_params->out_fd;
   int thread_id = thread_params->thread_id;
-
-  while (fd != -1) {
+  
+  while (1) {
     unsigned int event_id, delay;
     size_t num_rows, num_columns, num_coords;
     size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
@@ -242,16 +245,26 @@ void *thread_function(void *params){
         break;
 
       case CMD_WAIT:
-        if (parse_wait(fd, &delay, NULL) == -1) {  // thread_id is not implemented
+        unsigned int *target_id = malloc(sizeof(unsigned int));
+        int do_wait = parse_wait(fd, &delay, target_id);
+        if (do_wait == -1) {
+          free(target_id);
           pthread_mutex_unlock(&mutex);
           fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
         }
-        pthread_mutex_unlock(&mutex);
         if (delay > 0) {
-          printf("thread number %d\n now waiting", thread_id);
+          if (do_wait == 1 && *target_id != (unsigned int)thread_id) {
+            printf("thread number %d NOT waiting, thread %d should be\n", thread_id, *target_id); //threads might skip wait for others
+            free(target_id);
+            pthread_mutex_unlock(&mutex);
+            break;
+          }
+                    printf("thread number %d waiting for %dms as targeted by %d\n", thread_id, delay, *target_id);
+          free(target_id);
+          pthread_mutex_unlock(&mutex);
           ems_wait(delay);
-          printf("done\n");
+          printf("thread number %d done waiting\n", thread_id);
         }
         break;
 
@@ -281,10 +294,8 @@ void *thread_function(void *params){
         break;
 
       case EOC:
-        pthread_mutex_unlock(&mutex);
         //printf("End of commands\n"); 
-        close(fd);
-        close(out_fd);
+        pthread_mutex_unlock(&mutex);
         pthread_exit(NULL);
     }
   }
