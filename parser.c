@@ -1,6 +1,5 @@
 #include "parser.h"
 
-#include <errno.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -260,32 +259,4 @@ int parse_wait(int fd, unsigned int *delay, unsigned int *thread_id) {
     cleanup(fd);
     return -1;
   }
-}
-
-ssize_t safe_write(int fd, const void *buf, ssize_t count) {
-  ssize_t total_written = 0;
-  ssize_t bytes_written;
-
-  while (total_written < count) {
-    bytes_written =
-        write(fd, buf + total_written, (size_t)(count - total_written));
-
-    if (bytes_written == -1) {
-      if (errno == EINTR) {
-        // The write was interrupted by a signal, try again
-        continue;
-      } else {
-        fprintf(stderr, "Error writing\n");
-        break;
-      }
-    }
-
-    if (bytes_written == 0) {
-      break;
-    }
-
-    total_written += bytes_written;
-  }
-
-  return total_written;
 }

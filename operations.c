@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -50,6 +51,34 @@ static size_t seat_index(struct Event *event, size_t row, size_t col) {
   return (row - 1) * event->cols + col - 1;
 }
 
+ssize_t safe_write(int fd, const void *buf, ssize_t count) {
+  ssize_t total_written = 0;
+  ssize_t bytes_written;
+
+  while (total_written < count) {
+    bytes_written =
+        write(fd, buf + total_written, (size_t)(count - total_written));
+
+    if (bytes_written == -1) {
+      if (errno == EINTR) {
+        // The write was interrupted by a signal, try again
+        continue;
+      } else {
+        fprintf(stderr, "Error writing\n");
+        break;
+      }
+    }
+
+    if (bytes_written == 0) {
+      break;
+    }
+
+    total_written += bytes_written;
+  }
+
+  return total_written;
+}
+
 void write_uint(int fd, unsigned int value) {
   char buffer[2];
   int length = 0;
@@ -63,7 +92,7 @@ void write_uint(int fd, unsigned int value) {
   }
 
   for (int i = length - 1; i >= 0; --i) {
-    write(fd, &buffer[i], 1);
+    safe_write(fd, &buffer[i], 1);
   }
 }
 
@@ -200,11 +229,11 @@ int ems_show(unsigned int event_id, int fd) {
       write_uint(fd, *seat);
 
       if (j < event->cols) {
-        write(fd, " ", 1);
+        safe_write(fd, " ", 1);
       }
     }
 
-    write(fd, "\n", 1);
+    safe_write(fd, "\n", 1);
   }
   pthread_rwlock_unlock(&event_list->rwlock);
   return 0;
@@ -217,16 +246,16 @@ int ems_list_events(int fd) {
   }
   pthread_rwlock_rdlock(&event_list->rwlock);
   if (event_list->head == NULL) {
-    write(fd, "No events\n", 10);
+    safe_write(fd, "No events\n", 10);
     pthread_rwlock_unlock(&event_list->rwlock);
     return 0;
   }
 
   struct ListNode *current = event_list->head;
   while (current != NULL) {
-    write(fd, "Event: ", 7);
+    safe_write(fd, "Event: ", 7);
     write_uint(fd, (current->event)->id);
-    write(fd, "\n", 1);
+    safe_write(fd, "\n", 1);
     current = current->next;
   }
   pthread_rwlock_unlock(&event_list->rwlock);
