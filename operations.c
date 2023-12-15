@@ -194,13 +194,13 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t *xs,
       fprintf(stderr, "Invalid seat\n");
       break;
     }
-
-    if (*get_seat_with_delay(event, seat_index(event, row, col)) != 0) {
+    unsigned int *seat = get_seat_with_delay(event, seat_index(event, row, col));
+    if (*seat != 0) {
       fprintf(stderr, "Seat already reserved\n");
       break;
     }
 
-    *get_seat_with_delay(event, seat_index(event, row, col)) = reservation_id;
+    *seat = reservation_id;
   }
 
   // If the reservation was not successful, free the seats that were reserved.

@@ -196,8 +196,7 @@ void process_file(const char *filename) {
 
   pthread_t threads[MAX_THREADS];           // Array to store thread IDs
   struct thread_params params[MAX_THREADS]; // Array to store thread parameters
-  pthread_mutex_init(&mutex,
-                     NULL); // Initialize the mutex for thread synchronization
+  pthread_mutex_init(&mutex, NULL);
   void *thread_status = &barrier_flag;
   wait_queue = malloc(sizeof(int) * (unsigned long)MAX_THREADS);
 
@@ -223,6 +222,7 @@ void process_file(const char *filename) {
         return;
       }
     }
+    // If threads exited through barrier, restart the loop
   }
   // Closes file
   close(fd);
