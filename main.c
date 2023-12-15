@@ -215,6 +215,14 @@ void process_file(const char *filename) {
 
       if (pthread_create(&threads[i], NULL, thread_function, &params[i]) != 0) {
         fprintf(stderr, "Failed to create thread\n");
+        for (int j = 0; j < i; j++) {
+          if (pthread_join(threads[j], &thread_status) != 0) {
+            fprintf(stderr, "Failed to join thread\n");
+            close(fd);
+            close(out_fd);
+            return;
+          }
+        }
         return;
       }
     }

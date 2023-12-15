@@ -67,6 +67,10 @@ static void free_event(struct Event *event) {
   if (!event)
     return;
 
+  if (pthread_rwlock_destroy(&event->rwlock) != 0) {
+    // Error happening here makes no difference
+  }
+
   free(event->data);
   free(event);
 }

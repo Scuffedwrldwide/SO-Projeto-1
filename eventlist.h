@@ -7,6 +7,7 @@
 struct Event {
   unsigned int id;           /// Event id
   unsigned int reservations; /// Number of reservations for the event.
+  pthread_rwlock_t rwlock;   /// Read-write lock for the event.
 
   size_t cols; /// Number of columns.
   size_t rows; /// Number of rows.
