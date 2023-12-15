@@ -91,10 +91,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-
-  printf("MAX_PROC %d\n", MAX_PROC);
-  printf("MAX_THREADS %d\n", MAX_THREADS);
-
   if (ems_init(state_access_delay_ms)) {
     fprintf(stderr, "Failed to initialize EMS\n");
     closedir(dir);
@@ -113,7 +109,6 @@ int main(int argc, char *argv[]) {
       if (proc_count > MAX_PROC) {
         // If number of processes reaches max, wait for any child process to
         // finish before starting a new one
-        // printf("Waiting for child process to finish\n");
 
         pid = wait(&status);
 
@@ -130,12 +125,10 @@ int main(int argc, char *argv[]) {
       }
 
       if ((pid = fork()) == 0) { // Child process
-        // printf("Processing file %s\n", file->d_name);
         process_file(file->d_name);
         exit(0);
 
       } else { // Parent process
-        // printf("Child process %d started\n", pid);
         proc_count++;
       }
     }
@@ -144,7 +137,7 @@ int main(int argc, char *argv[]) {
   // Wait for all child processes to finish
   while (proc_count > 0) {
     pid = wait(&status);
-    printf("Child process %d finished with status %d\n", pid,
+    printf("Child process %d exited with status %d\n", pid,
            WEXITSTATUS(status));
 
     if (pid > 0) {
@@ -173,7 +166,6 @@ void process_file(const char *filename) {
   // Generates output file name by switching extension to .out
   strncpy(out_file_name, filename, strlen(filename) - 4);
   strcpy(&out_file_name[strlen(filename) - 4], "out\0");
-  printf("out_file_name %s\n", out_file_name);
 
   // Opens the output file for writing, creating it if necessary
   out_fd = open(out_file_name, O_WRONLY | O_CREAT | O_TRUNC,
@@ -402,7 +394,6 @@ void *thread_function(void *params) {
 
     case CMD_BARRIER:
       if (barrier_flag == 0) {
-        printf("thread number %d triggered barrier\n", thread_id);
         barrier_flag = 1;
       }
       if (pthread_mutex_unlock(&mutex) != 0) {
