@@ -241,7 +241,7 @@ void *thread_function(void *params) {
 
   // Continually processes commands
   while (1) {
-    unsigned int event_id, delay, *target_id;
+    unsigned int event_id, delay;
     int do_wait;
     size_t num_rows, num_columns, num_coords;
     size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
@@ -316,34 +316,28 @@ void *thread_function(void *params) {
 
     case CMD_WAIT:
       // Parses WAIT command and extracts delay and target ID
-      target_id = malloc(sizeof(unsigned int));
-      do_wait = parse_wait(fd, &delay, target_id);
+      unsigned int target_id;
+      do_wait = parse_wait(fd, &delay, &target_id);
       // Checks if parsing was unsuccessful
       if (do_wait == -1) {
-        free(target_id);
         pthread_mutex_unlock(&mutex);
         fprintf(stderr, "Invalid command. See HELP for usage\n");
         continue;
       }
-
       if (delay > 0) {
-        // Checks if thread should wait and if target is the same
-        if (do_wait == 1 && *target_id != (unsigned int)thread_id) {
-          //If the target is different, update the wait queue for the target thread
+        if (do_wait == 1) { // thread was specified
           printf("thread number %d NOT waiting, thread %d should be\n",
-                 thread_id, *target_id); // threads might skip wait for others
-          wait_queue[*target_id] += delay;
+                 thread_id, target_id); // threads might skip wait for others
+          wait_queue[target_id] += delay;
           // target id will be freed by the thread that is waiting
           pthread_mutex_unlock(&mutex);
-          break;
-        }
+        } else { // do_wait == 0, no thread specified
         printf("thread number %d waiting for %dms as targeted by %d\n",
-               thread_id, delay, *target_id);
-
-        free(target_id);
-        pthread_mutex_unlock(&mutex);
+               thread_id, delay, target_id);
         ems_wait(delay);
+        pthread_mutex_unlock(&mutex); // unlock after waiting, as all threads must wait
         printf("thread number %d done waiting\n", thread_id);
+        }
       }
       break;
 
