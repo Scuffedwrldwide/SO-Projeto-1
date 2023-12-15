@@ -138,7 +138,7 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
     return 1;
   }
 
-  struct Event *event = malloc(sizeof(struct Event));
+  struct Event *event = malloc(sizeof(struct Event)); // check malloc
 
   if (event == NULL) {
     fprintf(stderr, "Error allocating memory for event\n");

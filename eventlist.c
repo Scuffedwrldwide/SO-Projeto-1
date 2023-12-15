@@ -12,7 +12,12 @@ struct EventList *create_list() {
   list->head = NULL;
   list->tail = NULL;
   list->rwlock = (pthread_rwlock_t)PTHREAD_RWLOCK_INITIALIZER;
-  pthread_rwlock_init(&list->rwlock, NULL);
+
+  // Checks if rwlock_init failed
+  if (pthread_rwlock_init(&list->rwlock, NULL) != 0) {
+    free(list);
+    return NULL;
+  }
 
   return list;
 }
@@ -32,7 +37,10 @@ int append_to_list(struct EventList *list, struct Event *event) {
   new_node->event = event;
   new_node->next = NULL;
 
-  pthread_rwlock_wrlock(&list->rwlock);
+  if (pthread_rwlock_wrlock(&list->rwlock)) {
+    free(new_node);
+    return 1;
+  }
 
   // If the list is empty, set the new node as both head and tail
   if (list->head == NULL) {
@@ -42,7 +50,14 @@ int append_to_list(struct EventList *list, struct Event *event) {
     list->tail->next = new_node;
     list->tail = new_node;
   }
-  pthread_rwlock_unlock(&list->rwlock);
+  if (pthread_rwlock_unlock(&list->rwlock) != 0) {
+    if (list->head == new_node)
+      list->head = NULL;
+    if (list->tail == new_node)
+      list->tail = NULL;
+    free(new_node);
+    return 1;
+  }
 
   return 0;
 }
@@ -70,7 +85,9 @@ void free_list(struct EventList *list) {
     free(temp);
   }
 
-  pthread_rwlock_destroy(&list->rwlock);
+  if (pthread_rwlock_destroy(&list->rwlock) != 0) {
+    // Error happening here makes no difference
+  }
   free(list);
 }
 
@@ -80,19 +97,23 @@ struct Event *get_event(struct EventList *list, unsigned int event_id) {
   if (!list)
     return NULL;
 
-  pthread_rwlock_rdlock(&list->rwlock);
+  if (pthread_rwlock_rdlock(&list->rwlock) != 0)
+    return NULL;
+
   struct ListNode *current = list->head;
 
   while (current) {
     struct Event *event = current->event;
     if (event->id == event_id) {
-      pthread_rwlock_unlock(&list->rwlock);
+      if (pthread_rwlock_unlock(&list->rwlock) != 0)
+        return NULL;
       return event;
     }
     current = current->next;
   }
 
-  pthread_rwlock_unlock(&list->rwlock);
+  if (pthread_rwlock_unlock(&list->rwlock) != 0)
+    return NULL;
 
   return NULL;
 }
