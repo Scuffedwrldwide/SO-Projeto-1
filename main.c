@@ -37,19 +37,8 @@ int main(int argc, char *argv[]) {
   int option;
   DIR *dir = NULL;
 
-  // Checks if correct number of arguments was passed
-  if (argc < 2) {
-    fprintf(stderr,
-            "Usage: %s -d <state_access_delay_ms> -p <path> -m <max_proc> -t "
-            "<max_threads>\n",
-            argv[0]);
-    return 1;
-  }
-
   // Parses arguments
   while ((option = getopt(argc, argv, "d:p:m:t:")) != -1) {
-    printf("option %c\n", option);
-    printf("optarg %s\n", optarg);
     switch (option) {
     case 'd':
       if (optarg == NULL) {
@@ -66,7 +55,6 @@ int main(int argc, char *argv[]) {
       }
 
       state_access_delay_ms = (unsigned int)delay;
-      printf("state_access_delay_ms %d\n", state_access_delay_ms);
       break;
 
     case 'p':
@@ -93,6 +81,16 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
+
+  // Checks if correct number of arguments was passed
+  if (argc < 3 || dir == NULL) {
+    fprintf(stderr,
+            "Usage: %s -d <state_access_delay_ms> -p <path> -m <max_proc> -t "
+            "<max_threads>\n",
+            argv[0]);
+    return 1;
+  }
+
 
   printf("MAX_PROC %d\n", MAX_PROC);
   printf("MAX_THREADS %d\n", MAX_THREADS);
