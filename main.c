@@ -238,7 +238,7 @@ void *thread_function(void *params) {
 
   // Continually processes commands
   while (1) {
-    unsigned int event_id, delay;
+    unsigned int event_id, delay, target_id;
     int do_wait;
     size_t num_rows, num_columns, num_coords;
     size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
@@ -308,7 +308,6 @@ void *thread_function(void *params) {
 
     case CMD_WAIT:
       // Parses WAIT command and extracts delay and target ID
-      unsigned int target_id;
       do_wait = parse_wait(fd, &delay, &target_id);
       // Checks if parsing was unsuccessful
       if (do_wait == -1) {
@@ -340,8 +339,8 @@ void *thread_function(void *params) {
              "  RESERVE <event_id> [(<x1>,<y1>) (<x2>,<y2>) ...]\n"
              "  SHOW <event_id>\n"
              "  LIST\n"
-             "  WAIT <delay_ms> [thread_id]\n" // thread_id is not implemented
-             "  BARRIER\n"                     // Not implemented
+             "  WAIT <delay_ms> [thread_id]\n" 
+             "  BARRIER\n"                     
              "  HELP\n");
       break;
 
@@ -357,7 +356,6 @@ void *thread_function(void *params) {
       break;
 
     case EOC:
-      // printf("End of commands\n");
       pthread_mutex_unlock(&mutex);
       pthread_exit(NULL);
     }
