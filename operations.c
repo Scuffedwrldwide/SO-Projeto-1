@@ -186,7 +186,11 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t *xs,
     return 1;
   }
 
-  pthread_rwlock_wrlock(&event_list->rwlock);
+  if (pthread_rwlock_wrlock(&event_list->rwlock) != 0) {
+    fprintf(stderr, "Error locking event list\n");
+    return 1;
+  }
+
   unsigned int reservation_id = ++event->reservations;
 
   size_t i = 0;
@@ -214,10 +218,16 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t *xs,
     for (size_t j = 0; j < i; j++) {
       *get_seat_with_delay(event, seat_index(event, xs[j], ys[j])) = 0;
     }
-    pthread_rwlock_unlock(&event_list->rwlock);
+    if (pthread_rwlock_unlock(&event_list->rwlock) != 0) {
+      fprintf(stderr, "Error unlocking event list\n");
+      return 1;
+    }
     return 1;
   }
-  pthread_rwlock_unlock(&event_list->rwlock);
+  if (pthread_rwlock_unlock(&event_list->rwlock) != 0) {
+    fprintf(stderr, "Error unlocking event list\n");
+    return 1;
+  }
   return 0;
 }
 
@@ -235,7 +245,10 @@ int ems_show(unsigned int event_id, int fd) {
     return 1;
   }
 
-  pthread_rwlock_rdlock(&event_list->rwlock);
+  if (pthread_rwlock_rdlock(&event_list->rwlock) != 0) {
+    fprintf(stderr, "Error locking event list\n");
+    return 1;
+  }
   for (size_t i = 1; i <= event->rows; i++) {
     for (size_t j = 1; j <= event->cols; j++) {
       unsigned int *seat = get_seat_with_delay(event, seat_index(event, i, j));
@@ -248,7 +261,10 @@ int ems_show(unsigned int event_id, int fd) {
 
     safe_write(fd, "\n", 1);
   }
-  pthread_rwlock_unlock(&event_list->rwlock);
+  if (pthread_rwlock_unlock(&event_list->rwlock) != 0) {
+    fprintf(stderr, "Error unlocking event list\n");
+    return 1;
+  }
   return 0;
 }
 
@@ -258,10 +274,16 @@ int ems_list_events(int fd) {
     fprintf(stderr, "EMS state must be initialized\n");
     return 1;
   }
-  pthread_rwlock_rdlock(&event_list->rwlock);
+  if (pthread_rwlock_rdlock(&event_list->rwlock) != 0) {
+    fprintf(stderr, "Error locking event list with read lock\n");
+    return 1;
+  }
   if (event_list->head == NULL) {
     safe_write(fd, "No events\n", 10);
-    pthread_rwlock_unlock(&event_list->rwlock);
+    if (pthread_rwlock_unlock(&event_list->rwlock) != 0) {
+      fprintf(stderr, "Error unlocking event list\n");
+      return 1;
+    }
     return 0;
   }
 
@@ -272,7 +294,10 @@ int ems_list_events(int fd) {
     safe_write(fd, "\n", 1);
     current = current->next;
   }
-  pthread_rwlock_unlock(&event_list->rwlock);
+  if (pthread_rwlock_unlock(&event_list->rwlock) != 0) {
+    fprintf(stderr, "Error unlocking event list\n");
+    return 1;
+  }
   return 0;
 }
 
