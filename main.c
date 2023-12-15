@@ -265,7 +265,6 @@ void *thread_function(void *params) {
         continue;
       }
       pthread_mutex_unlock(&mutex);
-      // ems_creates returns 0 on success creating
       if (ems_create(event_id, num_rows, num_columns)) {
         fprintf(stderr, "Failed to create event\n");
       }
@@ -339,8 +338,8 @@ void *thread_function(void *params) {
              "  RESERVE <event_id> [(<x1>,<y1>) (<x2>,<y2>) ...]\n"
              "  SHOW <event_id>\n"
              "  LIST\n"
-             "  WAIT <delay_ms> [thread_id]\n" 
-             "  BARRIER\n"                     
+             "  WAIT <delay_ms> [thread_id]\n"
+             "  BARRIER\n"
              "  HELP\n");
       break;
 

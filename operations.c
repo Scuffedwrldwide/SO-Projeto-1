@@ -52,7 +52,11 @@ static size_t seat_index(struct Event *event, size_t row, size_t col) {
   return (row - 1) * event->cols + col - 1;
 }
 
-// Guarantees that a write isnt interrupted
+/// Guarantees that a write isnt interrupted
+/// @param fd File descriptor to write to.
+/// @param buf Buffer to write.
+/// @param count Number of bytes to write.
+/// @return Number of bytes written.
 ssize_t safe_write(int fd, const void *buf, ssize_t count) {
   ssize_t total_written = 0;
   ssize_t bytes_written;
@@ -194,7 +198,8 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t *xs,
       fprintf(stderr, "Invalid seat\n");
       break;
     }
-    unsigned int *seat = get_seat_with_delay(event, seat_index(event, row, col));
+    unsigned int *seat =
+        get_seat_with_delay(event, seat_index(event, row, col));
     if (*seat != 0) {
       fprintf(stderr, "Seat already reserved\n");
       break;
