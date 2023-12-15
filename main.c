@@ -31,7 +31,6 @@ int MAX_THREADS = 2;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 unsigned int barrier_flag = 0;
 
-
 int main(int argc, char *argv[]) {
   // Initialization
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
@@ -114,14 +113,15 @@ int main(int argc, char *argv[]) {
     if (file->d_name[0] != '.' &&
         strcmp(&file->d_name[strlen(file->d_name) - 4], "jobs") == 0) {
       if (proc_count > MAX_PROC) {
-        // If number of processes reaches max, wait for any child process to finish before starting a new one
-        printf("Waiting for child process to finish\n");
+        // If number of processes reaches max, wait for any child process to
+        // finish before starting a new one
+        // printf("Waiting for child process to finish\n");
 
         pid = wait(&status);
 
         if (pid > 0) {
           proc_count--;
-        } 
+        }
 
         else {
           fprintf(stderr, "Failed to wait for child process: %s\n",
@@ -131,13 +131,12 @@ int main(int argc, char *argv[]) {
         }
       }
 
-      if ((pid = fork()) == 0) {        // Child process
+      if ((pid = fork()) == 0) { // Child process
         // printf("Processing file %s\n", file->d_name);
         process_file(file->d_name);
         exit(0);
 
-      } 
-      else {        // Parent process
+      } else { // Parent process
         // printf("Child process %d started\n", pid);
         proc_count++;
       }
@@ -146,35 +145,34 @@ int main(int argc, char *argv[]) {
 
   // Wait for all child processes to finish
   while (proc_count > 0) {
-    // printf("Waiting for child process to finish\n");
     pid = wait(&status);
-    printf("Child process %d finished with status %d\n", pid, WEXITSTATUS(status));
+    printf("Child process %d finished with status %d\n", pid,
+           WEXITSTATUS(status));
 
     if (pid > 0) {
       proc_count--;
-    } 
-    else {
-      fprintf(stderr, "Failed to wait for child process: %s\n", strerror(errno));
+    } else {
+      fprintf(stderr, "Failed to wait for child process: %s\n",
+              strerror(errno));
       closedir(dir);
       return 1;
     }
   }
-  //Termination
+
   ems_terminate();
   free(wait_queue);
   closedir(dir);
   return 0;
 }
 
-
 void process_file(const char *filename) {
-  
+
   int fd = -1;
   int out_fd = -1;
   char out_file_name[32];
 
-  fd = open(filename, O_RDONLY); // Opens input file for reading
-  // Generates the output file name based on the input file name
+  fd = open(filename, O_RDONLY); // Opens input file
+  // Generates output file name by switching extension to .out
   strncpy(out_file_name, filename, strlen(filename) - 4);
   strcpy(&out_file_name[strlen(filename) - 4], "out\0");
   printf("out_file_name %s\n", out_file_name);
@@ -196,17 +194,17 @@ void process_file(const char *filename) {
     return;
   }
 
-  pthread_t threads[MAX_THREADS]; // Array to store thread IDs 
-  struct thread_params params[MAX_THREADS];  // Array to store thread parameters
-  pthread_mutex_init(&mutex, NULL); // Initialize the mutex for thread synchronization
+  pthread_t threads[MAX_THREADS];           // Array to store thread IDs
+  struct thread_params params[MAX_THREADS]; // Array to store thread parameters
+  pthread_mutex_init(&mutex,
+                     NULL); // Initialize the mutex for thread synchronization
   void *thread_status = &barrier_flag;
   wait_queue = malloc(sizeof(int) * (unsigned long)MAX_THREADS);
 
-  // Processes until all threads are complete
+  // Loops until threads exit through end of file
   while (thread_status != NULL) {
-    barrier_flag = 0; // Reset barrier flag
-    // Creates thread
-    for (int i = 0; i < MAX_THREADS; i++) {
+    barrier_flag = 0;                       // Reset barrier flag
+    for (int i = 0; i < MAX_THREADS; i++) { // Initialize threads
       params[i].fd = fd;
       params[i].out_fd = out_fd;
       params[i].thread_id = i;
@@ -216,7 +214,7 @@ void process_file(const char *filename) {
         return;
       }
     }
-    // Joins threads
+    // Joins threads after barrier or end of file
     for (int i = 0; i < MAX_THREADS; i++) {
       if (pthread_join(threads[i], &thread_status) != 0) {
         fprintf(stderr, "Failed to join thread\n");
@@ -230,7 +228,6 @@ void process_file(const char *filename) {
   close(fd);
   close(out_fd);
 }
-
 
 void *thread_function(void *params) {
   // Extracts parameters from struct
@@ -250,15 +247,11 @@ void *thread_function(void *params) {
     pthread_mutex_lock(&mutex);
     // Checks if thread should wait
     if (wait_queue[thread_id] > 0) {
-      printf("thread number %d ordered to wait for %dms\n", thread_id,
-             wait_queue[thread_id]);
       ems_wait(wait_queue[thread_id]);
       wait_queue[thread_id] = 0;
-      printf("thread number %d done waiting\n", thread_id);
     }
-    // Checks if barrier is present
+    // Checks if barrier has been triggered
     if (barrier_flag != 0) {
-      printf("thread number %d found closed barrier\n", thread_id);
       pthread_mutex_unlock(&mutex);
       pthread_exit(&barrier_flag);
     }
@@ -272,9 +265,8 @@ void *thread_function(void *params) {
         continue;
       }
       pthread_mutex_unlock(&mutex);
-      //ems_creates returns 0 on success creating
-      if (ems_create(event_id, num_rows, num_columns)) 
-      {
+      // ems_creates returns 0 on success creating
+      if (ems_create(event_id, num_rows, num_columns)) {
         fprintf(stderr, "Failed to create event\n");
       }
       break;
@@ -326,17 +318,12 @@ void *thread_function(void *params) {
       }
       if (delay > 0) {
         if (do_wait == 1) { // thread was specified
-          printf("thread number %d NOT waiting, thread %d should be\n",
-                 thread_id, target_id); // threads might skip wait for others
-          wait_queue[target_id] += delay;
-          // target id will be freed by the thread that is waiting
+          wait_queue[target_id] +=
+              delay; // queue wait for when specified thread unlocks
           pthread_mutex_unlock(&mutex);
         } else { // do_wait == 0, no thread specified
-        printf("thread number %d waiting for %dms as targeted by %d\n",
-               thread_id, delay, target_id);
-        ems_wait(delay);
-        pthread_mutex_unlock(&mutex); // unlock after waiting, as all threads must wait
-        printf("thread number %d done waiting\n", thread_id);
+          ems_wait(delay);
+          pthread_mutex_unlock(&mutex); // all threads wait behind lock
         }
       }
       break;

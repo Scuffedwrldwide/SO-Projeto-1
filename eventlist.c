@@ -8,7 +8,7 @@ struct EventList *create_list() {
   if (!list)
     return NULL;
 
-  // Initializes 
+  // Initializes
   list->head = NULL;
   list->tail = NULL;
   list->rwlock = (pthread_rwlock_t)PTHREAD_RWLOCK_INITIALIZER;
@@ -38,8 +38,7 @@ int append_to_list(struct EventList *list, struct Event *event) {
   if (list->head == NULL) {
     list->head = new_node;
     list->tail = new_node;
-  } 
-  else {
+  } else {
     list->tail->next = new_node;
     list->tail = new_node;
   }
@@ -80,7 +79,7 @@ struct Event *get_event(struct EventList *list, unsigned int event_id) {
   // Checks if the list is valid
   if (!list)
     return NULL;
-  
+
   pthread_rwlock_rdlock(&list->rwlock);
   struct ListNode *current = list->head;
 
@@ -92,7 +91,7 @@ struct Event *get_event(struct EventList *list, unsigned int event_id) {
     }
     current = current->next;
   }
-  
+
   pthread_rwlock_unlock(&list->rwlock);
 
   return NULL;

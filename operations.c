@@ -52,20 +52,20 @@ static size_t seat_index(struct Event *event, size_t row, size_t col) {
   return (row - 1) * event->cols + col - 1;
 }
 
-//Guarantees that a write isnt interrupted
+// Guarantees that a write isnt interrupted
 ssize_t safe_write(int fd, const void *buf, ssize_t count) {
   ssize_t total_written = 0;
   ssize_t bytes_written;
 
   while (total_written < count) {
-    bytes_written = write(fd, buf + total_written, (size_t)(count - total_written));
+    bytes_written =
+        write(fd, buf + total_written, (size_t)(count - total_written));
 
     if (bytes_written == -1) {
       if (errno == EINTR) {
         // The write was interrupted by a signal, try again
         continue;
-      } 
-      else {
+      } else {
         fprintf(stderr, "Error writing\n");
         break;
       }
@@ -81,7 +81,7 @@ ssize_t safe_write(int fd, const void *buf, ssize_t count) {
   return total_written;
 }
 
-//Writes an unsigned int to a file descriptor
+// Writes an unsigned int to a file descriptor
 void write_uint(int fd, unsigned int value) {
   char buffer[2];
   int length = 0;
@@ -99,7 +99,7 @@ void write_uint(int fd, unsigned int value) {
   }
 }
 
-//Iitializes the EMS state
+// Iitializes the EMS state
 int ems_init(unsigned int delay_ms) {
   if (event_list != NULL) {
     fprintf(stderr, "EMS state has already been initialized\n");
@@ -112,7 +112,7 @@ int ems_init(unsigned int delay_ms) {
   return event_list == NULL;
 }
 
-//Terminates the EMS state
+// Terminates the EMS state
 int ems_terminate() {
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
